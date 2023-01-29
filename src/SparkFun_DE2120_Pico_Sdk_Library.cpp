@@ -10,9 +10,6 @@
 
   The DE2120 is a camera-based barcode scanner
   https://github.com/sparkfun/SparkFun_DE2120_Arduino_Library
-  Development environment specifics:
-
-  Arduino IDE 1.8.7
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,41 +19,69 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "SparkFun_DE2120_Arduino_Library.h"
-#include "Arduino.h"
+#include "SparkFun_DE2120_Pico_Sdk_Library.h"
+#include "pico/stdlib.h"
+#include "pico/time.h"
+#include <string.h>
+#include <stdio.h>
 
-#include <SoftwareSerial.h>
+typedef uint8_t byte;
+
+class PicoArduinoSerial {
+  uart_inst_t* uart_;
+public:
+  PicoArduinoSerial()
+    : uart_(nullptr)
+  {}
+
+  void init(uart_inst_t* uart, uint8_t txPin, uint8_t rxPin)
+  {
+    uart_ = uart;
+    uart_init(uart_, 115200);
+    gpio_set_function(txPin, GPIO_FUNC_UART);
+    gpio_set_function(rxPin, GPIO_FUNC_UART);
+  }
+
+  uint8_t available()
+  {
+    return uart_is_readable(uart_);
+  }
+
+  uint8_t read()
+  {
+    return uart_getc(uart_);
+  }
+
+  void print(const char* string)
+  {
+    uart_write_blocking(uart_, reinterpret_cast<const uint8_t*>(string), strlen(string));
+  }
+
+  void begin(uint baud)
+  {
+    uart_set_baudrate(uart_, baud);
+  }
+};
+
+#define millis() to_ms_since_boot (get_absolute_time())
+
+#define delay(x) sleep_ms(x)
+
 
 //Constructor
 DE2120::DE2120(void)
+  : _serial(nullptr)
 {
 }  
 
 //Initializes the device with basic settings
 //Returns false if device is not detected
-bool DE2120::begin(HardwareSerial &serialPort)
+bool DE2120::begin(uart_inst_t* uart, uint8_t txPin, uint8_t rxPin)
 {
-  //Trick comes from: https://forum.arduino.cc/index.php?topic=503782.msg3435988#msg3435988
-  hwStream = &serialPort;
-  swStream = NULL;
-  _serial = hwStream;
-
-  if (isConnected() == false)
-    return (false); //No device detected
-
-  //Clear any remaining incoming chars. The prevents a mis-read of the first barcode.
-  while (_serial->available())
-    _serial->read();
-
-  return (true); //We're all setup!
-}
-
-bool DE2120::begin(SoftwareSerial &serialPort)
-{
-  //Serial.println("I am software");
-  swStream = &serialPort;
-  hwStream = NULL;
-  _serial = swStream;
+  if (_serial == nullptr) {
+    _serial = new PicoArduinoSerial();
+    _serial->init(uart, txPin, rxPin);
+  }
 
   if (isConnected() == false)
     return (false); //No device detected
@@ -75,30 +100,19 @@ bool DE2120::begin(SoftwareSerial &serialPort)
 bool DE2120::isConnected()
 {
   //Attempt initial comm at 9600
-  if (hwStream)
-    hwStream->begin(9600);
-  else
-    swStream->begin(9600);
+  _serial->begin(9600);
 
   if (sendCommand(COMMAND_GET_VERSION, "", 800)) //Takes ~430ms to get firmware version response
     return (true);
 
-  //If we failed, try again at the factory default of 115200bps
-  if (hwStream)
-    hwStream->begin(115200);
-  else
-    swStream->begin(115200);
+  _serial->begin(115200);
 
   delay(10);
 
   sendCommand(PROPERTY_BAUD_RATE, "5", 500); //Goto 9600bps
   //300ms is too quick for module to switch to new setting
 
-  //Return to 9600bps
-  if (hwStream)
-    hwStream->begin(9600);
-  else
-    swStream->begin(9600);
+  _serial->begin(9600);
 
   delay(10);
 
@@ -189,9 +203,10 @@ bool DE2120::readBarcode(char *resultBuffer, uint8_t size)
     if (_serial->available())
     {
       resultBuffer[idx] = _serial->read();
+      printf("GOT char '%c'\n", resultBuffer[idx]);
       if (resultBuffer[idx] == '\r')
       {
-        resultBuffer[idx+1] = '\0';
+        resultBuffer[idx] = '\0';
         return true;
       }
     }
@@ -200,6 +215,36 @@ bool DE2120::readBarcode(char *resultBuffer, uint8_t size)
   }
 
   return (false);
+}
+
+void DE2120::readBarcodeBlocking(char *resultBuffer, size_t size)
+{
+  uint8_t idx = 0;
+  while (true) {
+    if (_serial->available()) {
+      resultBuffer[idx] = _serial->read();
+      printf("Got = '%c'\n", resultBuffer[idx]);
+      if (resultBuffer[idx] == '\r')
+      {
+        resultBuffer[idx] = '\0';
+        printf("Finished = '%s'\n", resultBuffer);
+        return;
+      }
+      idx++;
+    }
+  }
+}
+
+void DE2120::readBarcodeSingle(char *resultBuffer, size_t size)
+{
+  while (available()) {
+      read();
+  }
+  startScan();
+  enableDecodeBeep();
+  readBarcodeBlocking(resultBuffer, size);
+  disableDecodeBeep();
+  stopScan();
 }
 
 // Change the serial baud rate for the barcode module (default 115200)

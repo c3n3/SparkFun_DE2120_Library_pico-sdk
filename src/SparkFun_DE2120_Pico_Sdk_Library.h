@@ -12,8 +12,6 @@
   https://github.com/sparkfun/SparkFun_DE2120_Arduino_Library
   Development environment specifics:
   
-  Arduino IDE 1.8.7
-  
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
@@ -24,9 +22,8 @@
 
 #ifndef _SPARKFUN_DE2120_ARDUINO_LIBRARY_H
 #define _SPARKFUN_DE2120_ARDUINO_LIBRARY_H
-#include "Arduino.h"
 
-#include <SoftwareSerial.h>
+#include "hardware/uart.h"
 
 #define DE2120_COMMAND_ACK 0x06
 #define DE2120_COMMAND_NACK 0x15
@@ -138,19 +135,22 @@
 #define PROPERTY_ENABLE_ALL_2D "AQRENA"
 #define PROPERTY_DISABLE_ALL_2D "AQRDIS"
 
+class PicoArduinoSerial;
+
 class DE2120
 {
 public:
   DE2120();
 
-  bool begin(HardwareSerial &serialPort);
-  bool begin(SoftwareSerial &serialPort);
+  bool begin(uart_inst_t* uart, uint8_t txPin, uint8_t rxPin);
 
   bool isConnected();   //Returns true if device's ID is what it should be
   uint8_t getVersion(); //Queries device for its Version #
   bool factoryDefault();
   bool sendCommand(const char *cmd, const char *arg = "", uint32_t maxWaitInms = 3000);
   bool readBarcode(char *resultBuffer, uint8_t size);
+  void readBarcodeBlocking(char *resultBuffer, size_t size);
+  void readBarcodeSingle(char *resultBuffer, size_t size);
   bool available();
   int read();
   bool changeBaudRate(uint32_t baud);
@@ -179,11 +179,7 @@ public:
   bool stopScan();
 
 private:
-  //char _responseBuffer[]
-
-  HardwareSerial *hwStream;
-  SoftwareSerial *swStream;
-  Stream *_serial;
+  PicoArduinoSerial* _serial;
 };
 
 #endif
