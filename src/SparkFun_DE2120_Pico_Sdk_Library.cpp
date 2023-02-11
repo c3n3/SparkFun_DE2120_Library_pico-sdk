@@ -203,7 +203,6 @@ bool DE2120::readBarcode(char *resultBuffer, uint8_t size)
     if (_serial->available())
     {
       resultBuffer[idx] = _serial->read();
-      printf("GOT char '%c'\n", resultBuffer[idx]);
       if (resultBuffer[idx] == '\r')
       {
         resultBuffer[idx] = '\0';
@@ -223,11 +222,9 @@ void DE2120::readBarcodeBlocking(char *resultBuffer, size_t size)
   while (true) {
     if (_serial->available()) {
       resultBuffer[idx] = _serial->read();
-      printf("Got = '%c'\n", resultBuffer[idx]);
       if (resultBuffer[idx] == '\r')
       {
         resultBuffer[idx] = '\0';
-        printf("Finished = '%s'\n", resultBuffer);
         return;
       }
       idx++;
