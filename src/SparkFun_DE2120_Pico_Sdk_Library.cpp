@@ -216,32 +216,40 @@ bool DE2120::readBarcode(char *resultBuffer, uint8_t size)
   return (false);
 }
 
-void DE2120::readBarcodeBlocking(char *resultBuffer, size_t size)
+int DE2120::readBarcodeBlocking(char *resultBuffer, size_t size)
 {
-  uint8_t idx = 0;
+  uint16_t idx = 0;
+  uint32_t lastTime = millis();
+  bool enable = false;
   while (true) {
-    if (_serial->available()) {
+    if (enable && millis() - lastTime > 100) {
+      return idx;
+    }
+    if (_serial->available() && idx < size) {
+      enable = true;
+      lastTime = millis();
       resultBuffer[idx] = _serial->read();
-      if (resultBuffer[idx] == '\r')
-      {
-        resultBuffer[idx] = '\0';
-        return;
-      }
       idx++;
     }
   }
+  return idx;
 }
 
-void DE2120::readBarcodeSingle(char *resultBuffer, size_t size)
+int DE2120::readBarcodeSingle(char *resultBuffer, size_t size)
 {
   while (available()) {
       read();
   }
+  enableContinuousRead();
+  lightOn();
   startScan();
   enableDecodeBeep();
-  readBarcodeBlocking(resultBuffer, size);
+  enableAll2D();
+  int ret = readBarcodeBlocking(resultBuffer, size);
   disableDecodeBeep();
+  lightOff();
   stopScan();
+  return ret;
 }
 
 // Change the serial baud rate for the barcode module (default 115200)

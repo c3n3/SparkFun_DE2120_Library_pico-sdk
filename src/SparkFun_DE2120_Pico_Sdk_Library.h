@@ -149,8 +149,8 @@ public:
   bool factoryDefault();
   bool sendCommand(const char *cmd, const char *arg = "", uint32_t maxWaitInms = 3000);
   bool readBarcode(char *resultBuffer, uint8_t size);
-  void readBarcodeBlocking(char *resultBuffer, size_t size);
-  void readBarcodeSingle(char *resultBuffer, size_t size);
+  int readBarcodeBlocking(char *resultBuffer, size_t size);
+  int readBarcodeSingle(char *resultBuffer, size_t size);
   bool available();
   int read();
   bool changeBaudRate(uint32_t baud);
